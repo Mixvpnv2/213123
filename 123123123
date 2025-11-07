@@ -1,0 +1,2881 @@
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local Terrain = workspace.Terrain
+local Camera = workspace.CurrentCamera
+local StarterGui = game:GetService("StarterGui")
+
+-- Core Variables
+local Client = Players.LocalPlayer
+local RootPart = nil
+local GameFramework = {
+    Originals = {
+        Springs = {
+            leanAlpha = {Speed = 4, Force = 50},
+            jumpTilt = {Speed = 4, Force = 90},
+            walkCycle = {Speed = 4, Force = 50},
+            sprintCycle = {Speed = 4, Force = 50},
+            strafeTilt = {Speed = 4, Force = 50},
+            cameraRecoil = {Force = 100, Speed = 6},
+            recoilPos = {Speed = 5, Force = 75},
+            recoilRot = {Speed = 3, Force = 35},
+            sway = {Force = 100, Speed = 4},
+            wallTouchTilt = {Speed = 4, Force = 50}
+        }
+    },
+    FPS = nil,
+    CurrentData = nil
+}
+
+-- Cheat Configuration
+local Cheat = {
+    Options = {
+        GunMods = {
+            RemoveObstructions = {Value = false},
+            NoRecoil = {Value = false},
+            NoSway = {Value = false},
+            NoBobbing = {Value = false},
+            InstantLean = {Value = false},
+            InstantEquip = {Value = false},
+            InstantAim = {Value = false},
+            UnlockFiremodes = {Value = false}
+        },
+        SilentAim = {
+            Enabled = {Value = false},
+            HitChance = {Amount = 100},
+            Fov = {Size = 100, Show = true},
+            HitPart = "Head"
+        },
+        Misc = {
+            AspectRatio = {Enabled = false, Horizontal = 100, Vertical = 100}
+        },
+        AntiAim = {
+            Enabled = {Value = false},
+            Yaw = {Mode = "Static", Value = 0, LerpMin = -25, LerpMax = 25},
+            Roll = {Mode = "Static", Value = 0, LerpMin = -25, LerpMax = 25}
+        },
+        Visuals = {
+            Shadows = {Enabled = true},
+            Bloom = {Enabled = true},
+            SunRays = {Enabled = true},
+            WaterBlur = {Size = 24},
+            Clouds = {Enabled = true},
+            Foliage = {Enabled = true},
+            Grass = {Enabled = true},
+            Ambient = {Color = Lighting.Ambient},
+            Fullbright = {Enabled = false},
+            ScreenEffects = {Enabled = true},
+            ServerInfo = {Visible = true},
+            FOV = {Enabled = false, Value = 70, Persistent = true} -- Added FOV persistence
+        }
+    },
+    storage = {
+        lastHitPart = nil,
+        originalAmmoTypes = {},
+        originalGunConfigs = {},
+        originalArmMaterials = {},
+        originalArmColors = {}
+    },
+    Connections = {}
+}
+
+-- UI Initialization
+local Decimals = 4
+local Clock = os.clock()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mixvpnv2/Meow/refs/heads/main/Meow"))({
+    cheatname = "OctoHook.Xyz V2", 
+    gamename = "Project Delta", 
+})
+library:init()
+
+local Window1 = library.NewWindow({
+    title = "OctoHook", 
+    size = UDim2.new(0, 510, 0.6, 6)
+})
+
+-- Tabs
+local CombatTab = Window1:AddTab("  Combat  ")
+local VisualsTab = Window1:AddTab("  Visuals  ")
+local MovementTab = Window1:AddTab("  Movement  ")
+local MiscTab = Window1:AddTab("  Misc  ")
+local SettingsTab = library:CreateSettingsTab(Window1)
+
+-- Weapon Modifications Section
+local WeaponModsSection = CombatTab:AddSection("Weapon Modifications", 1)
+
+-- Store original functions and current weapon data
+local OriginalEquip, OriginalUpdateClient
+local CurrentWeapon = nil
+local IsHooked = false
+
+-- Auto-update system
+local AutoUpdate = {
+    Enabled = false,
+    Connection = nil
+}
+
+-- Hook into FPS module
+local function HookFPSModule()
+    local success, FPSModule = pcall(function()
+        return require(game:GetService("ReplicatedStorage").Modules.FPS)
+    end)
+    
+    if success and FPSModule then
+        -- Hook equip function
+        if FPSModule.equip then
+            OriginalEquip = FPSModule.equip
+            FPSModule.equip = function(p_u_632, p633, p_u_634)
+                -- Call original function first
+                local result = OriginalEquip(p_u_632, p633, p_u_634)
+                
+                -- Store current weapon reference
+                CurrentWeapon = p_u_632
+                
+                if library.flags.RapidFire then
+                    p_u_632.FireRate = 1 / library.flags.FireRateValue  -- Convert RPS to delay
+                end
+                
+                if library.flags.ManipulateBullets then
+                    p_u_632.Bullets = library.flags.BulletsValue  -- Set bullet count
+                end
+                
+                return result
+            end
+        end
+        
+        -- Start auto-update system
+        AutoUpdate.Enabled = true
+        IsHooked = true
+        
+        return true
+    else
+        return false
+    end
+end
+
+-- Auto-update function that runs continuously
+local function StartAutoUpdate()
+    if AutoUpdate.Connection then
+        AutoUpdate.Connection:Disconnect()
+    end
+    
+    AutoUpdate.Connection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not AutoUpdate.Enabled or not CurrentWeapon then return end
+        
+        -- Apply rapid fire
+        if library.flags.RapidFire then
+            pcall(function()
+                CurrentWeapon.FireRate = 1 / library.flags.FireRateValue
+            end)
+        end
+        
+        -- Apply bullet manipulation
+        if library.flags.ManipulateBullets then
+            pcall(function()
+                CurrentWeapon.Bullets = library.flags.BulletsValue
+            end)
+        end
+    end)
+end
+
+WeaponModsSection:AddToggle({
+    text = "Rapid Fire", 
+    state = false,
+    risky = true,
+    flag = "RapidFire",
+    callback = function(v)
+        print("Rapid Fire:", v)
+        if v and IsHooked then
+        end
+    end
+})
+
+WeaponModsSection:AddToggle({
+    text = "Manipulate Bullets (Soon Fix)",
+    state = false,
+    risky = true,
+    flag = "ManipulateBullets",
+    callback = function(v)
+        print("Manipulate Bullets:", v)
+        if v and IsHooked then
+        end
+    end
+})
+
+WeaponModsSection:AddToggle({
+    text = "Remove Obstructions",
+    flag = "RemoveObstructionsToggle",
+    callback = function(v) Cheat.Options.GunMods.RemoveObstructions.Value = v end
+})
+
+WeaponModsSection:AddToggle({
+    text = "No Recoil",
+    flag = "NoRecoilToggle",
+    callback = function(v) Cheat.Options.GunMods.NoRecoil.Value = v end
+})
+
+WeaponModsSection:AddToggle({
+    text = "No Sway",
+    flag = "NoSwayToggle",
+    callback = function(v) Cheat.Options.GunMods.NoSway.Value = v end
+})
+
+WeaponModsSection:AddToggle({
+    text = "No Bobbing",
+    flag = "NoBobbingToggle",
+    callback = function(v) Cheat.Options.GunMods.NoBobbing.Value = v end
+})
+
+WeaponModsSection:AddToggle({
+    text = "Instant Lean",
+    flag = "InstantLeanToggle",
+    callback = function(v) Cheat.Options.GunMods.InstantLean.Value = v end
+})
+
+WeaponModsSection:AddToggle({
+    text = "Instant Equip",
+    flag = "InstantEquipToggle",
+    callback = function(v) 
+        Cheat.Options.GunMods.InstantEquip.Value = v 
+        if v then
+            library:SendNotification("Instant Equip Enabled", 3)
+        end
+    end
+})
+
+WeaponModsSection:AddToggle({
+    text = "Instant Aim",
+    flag = "InstantAimToggle",
+    callback = function(v) Cheat.Options.GunMods.InstantAim.Value = v end
+})
+
+WeaponModsSection:AddToggle({
+    text = "Unlock Firemodes",
+    flag = "UnlockFiremodesToggle",
+    callback = function(v) Cheat.Options.GunMods.UnlockFiremodes.Value = v end
+})
+-- Silent Aim Section
+local SilentAimSection = CombatTab:AddSection("Silent Aim", 2)
+
+SilentAimSection:AddToggle({
+    text = "Enabled",
+    flag = "SilentAimToggle",
+    callback = function(v) 
+        Cheat.Options.SilentAim.Enabled.Value = v 
+        if v then
+            library:SendNotification("Silent Aim Enabled", 3)
+        end
+    end
+}):AddBind({
+    text = "Keybind",
+    mode = "toggle",
+    flag = "SilentAimKey",
+    callback = function(v) Cheat.Options.SilentAim.Enabled.Value = v end
+})
+
+SilentAimSection:AddSlider({
+    text = "Hit Chance",
+    flag = "HitChanceSlider",
+    suffix = "%",
+    min = 0, max = 100,
+    value = 100,
+    callback = function(v) Cheat.Options.SilentAim.HitChance.Amount = v end
+})
+
+SilentAimSection:AddSlider({
+    text = "FOV Size",
+    flag = "FovSizeSlider",
+    suffix = "px",
+    min = 10, max = 500,
+    value = 100,
+    callback = function(v) Cheat.Options.SilentAim.Fov.Size = v end
+})
+
+SilentAimSection:AddToggle({
+    text = "Show FOV",
+    state = true,
+    flag = "ShowFovToggle",
+    callback = function(v) Cheat.Options.SilentAim.Fov.Show = v end
+})
+
+SilentAimSection:AddList({
+    text = "Hit Part",
+    selected = "Head",
+    values = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart"},
+    callback = function(v) Cheat.Options.SilentAim.HitPart = v end
+})
+
+SilentAimSection:AddSlider({
+    text = "Fire Rate",
+    flag = "FireRateValue",
+    suffix = " RPS",
+    dragging = true,
+    min = 1,
+    max = 100,
+    increment = 1,
+    value = 10,
+    callback = function(v)
+        print("Fire Rate:", v, "RPS")
+        if library.flags.RapidFire and IsHooked then
+        end
+    end
+})
+
+SilentAimSection:AddSlider({
+    text = "Bullet Count",
+    flag = "BulletsValue",
+    suffix = " bullets",
+    dragging = true,
+    min = 1,
+    max = 100,
+    increment = 1,
+    value = 30,
+    callback = function(v)
+        print("Bullet Count:", v)
+        if library.flags.ManipulateBullets and IsHooked then
+        end
+    end
+})
+
+
+-- Anti-Aim Section
+local AntiAimSection = CombatTab:AddSection("Anti-Aim", 3)
+
+AntiAimSection:AddToggle({
+    text = "Enabled",
+    flag = "AntiAimToggle",
+    callback = function(v) Cheat.Options.AntiAim.Enabled.Value = v end
+})
+
+AntiAimSection:AddList({
+    text = "Yaw Mode",
+    selected = "Static",
+    values = {"Static", "Jitter", "Random"},
+    callback = function(v) Cheat.Options.AntiAim.Yaw.Mode = v end
+})
+
+AntiAimSection:AddSlider({
+    text = "Yaw Value",
+    flag = "YawValueSlider",
+    min = -180, max = 180,
+    value = 0,
+    callback = function(v) Cheat.Options.AntiAim.Yaw.Value = v end
+})
+
+AntiAimSection:AddList({
+    text = "Roll Mode",
+    selected = "Static",
+    values = {"Static", "Jitter", "Random"},
+    callback = function(v) Cheat.Options.AntiAim.Roll.Mode = v end
+})
+
+AntiAimSection:AddSlider({
+    text = "Roll Value",
+    flag = "RollValueSlider",
+    min = -180, max = 180,
+    value = 0,
+    callback = function(v) Cheat.Options.AntiAim.Roll.Value = v end
+})
+-- =============================================
+-- WEAPON VISUAL & FOV PRESERVATION SYSTEM
+-- =============================================
+local WeaponVisualsSection = CombatTab:AddSection("Visual Preservation", 4)
+
+-- Gun Customization Variables
+local ArmEnabled = false
+local ArmColor = Color3.new(0.458824, 0.466667, 1.000000)
+local ArmMaterial = Enum.Material.ForceField
+
+-- Function to modify parts
+local function ModifyParts(obj)
+    for _, part in ipairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if not Cheat.storage.originalArmMaterials[part] then
+                Cheat.storage.originalArmMaterials[part] = part.Material
+            end
+            if not Cheat.storage.originalArmColors[part] then
+                Cheat.storage.originalArmColors[part] = part.Color
+            end
+            
+            part.Material = ArmMaterial
+            part.Color = ArmColor
+        end
+    end
+end
+
+-- Function to restore parts
+local function RestoreParts(obj)
+    for _, part in ipairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if Cheat.storage.originalArmMaterials[part] then
+                part.Material = Cheat.storage.originalArmMaterials[part]
+            end
+            if Cheat.storage.originalArmColors[part] then
+                part.Color = Cheat.storage.originalArmColors[part]
+            end
+        end
+    end
+end
+
+-- Function to remove surfaces
+local function RemoveSurfaces(obj)
+    for _, surface in ipairs(obj:GetDescendants()) do
+        if surface:IsA("SurfaceAppearance") then
+            surface:Destroy()
+        end
+    end
+end
+
+-- Enhanced weapon visual system
+local function SetupWeaponVisuals()
+    local camera = workspace.Camera
+    if not camera then return end
+    
+    -- Clean up previous connections
+    if Cheat.Connections.ViewModelAdded then
+        Cheat.Connections.ViewModelAdded:Disconnect()
+    end
+    if Cheat.Connections.WeaponItemAdded then
+        Cheat.Connections.WeaponItemAdded:Disconnect()
+    end
+    
+    local function applyVisualsToViewModel(viewModel)
+        if not viewModel then return end
+        
+        -- Apply gun modifications if enabled
+        if ArmEnabled then
+            -- Clear previous modifications
+            RestoreParts(viewModel)
+            
+            -- Apply new modifications
+            ModifyParts(viewModel)
+            
+            local weaponItem = viewModel:FindFirstChild("Item")
+            if weaponItem then
+                RestoreParts(weaponItem)
+                ModifyParts(weaponItem)
+                RemoveSurfaces(weaponItem)
+            end
+        end
+        
+        -- Handle FOV preservation
+        if Cheat.Options.Visuals.FOV.Enabled and Cheat.Options.Visuals.FOV.Persistent then
+            Camera.FieldOfView = Cheat.Options.Visuals.FOV.Value
+        end
+    end
+    
+    -- Process existing ViewModel
+    local viewModel = camera:FindFirstChild("ViewModel")
+    applyVisualsToViewModel(viewModel)
+    
+    -- Connect to new ViewModels
+    Cheat.Connections.ViewModelAdded = camera.ChildAdded:Connect(function(child)
+        if child.Name == "ViewModel" then
+            applyVisualsToViewModel(child)
+            
+            -- Reapply settings when weapon item is added
+            Cheat.Connections.WeaponItemAdded = child.ChildAdded:Connect(function(item)
+                if item.Name == "Item" then
+                    task.wait(0.2) -- Wait for full load
+                    applyVisualsToViewModel(child)  
+                end
+            end)
+        end
+    end)
+end
+
+-- FOV preservation system
+local function PersistentFOV()
+    while task.wait(0.1) do
+        if Cheat.Options.Visuals.FOV.Enabled and Cheat.Options.Visuals.FOV.Persistent then
+            Camera.FieldOfView = Cheat.Options.Visuals.FOV.Value
+        end
+    end
+end
+
+-- Add UI toggles
+WeaponVisualsSection:AddToggle({
+    text = "Persistent Weapon Visuals",
+    flag = "PersistentWeaponVisuals",
+    state = true,
+    callback = function(v)
+        if v then
+            SetupWeaponVisuals()
+        else
+            -- Clean up connections
+            if Cheat.Connections.ViewModelAdded then
+                Cheat.Connections.ViewModelAdded:Disconnect()
+            end
+            if Cheat.Connections.WeaponItemAdded then
+                Cheat.Connections.WeaponItemAdded:Disconnect()
+            end
+        end
+    end
+})
+-- Visuals Tab Sections
+local VisualsSection1 = VisualsTab:AddSection("Environment", 1)
+local VisualsSection2 = VisualsTab:AddSection("Lighting", 2)
+local VisualsSection3 = VisualsTab:AddSection("Foliage", 3)
+local VisualsSection4 = VisualsTab:AddSection("UI", 4)
+local VisualsSection5 = VisualsTab:AddSection("Gun Customization", 5)
+
+-- FOV Control Section
+local FOVSection = VisualsTab:AddSection("FOV Control", 6)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+-- FOV Control System
+local fovConnections = {}
+local currentFOV = 90
+
+local function updateFOV()
+    if ReplicatedStorage.Players:FindFirstChild(localPlayer.Name) then
+        local settings = ReplicatedStorage.Players[localPlayer.Name].Settings
+        if settings and settings.GameplaySettings then
+            settings.GameplaySettings:SetAttribute("DefaultFOV", currentFOV)
+        end
+    end
+end
+
+local function manageFOVUpdates(enable)
+    -- Cleanup existing connections
+    for _, connection in pairs(fovConnections) do
+        connection:Disconnect()
+    end
+    fovConnections = {}
+
+    if enable then
+        -- Persistent update system
+        fovConnections.heartbeat = RunService.H     eartbeat:Connect(function()
+            updateFOV()
+        end)
+        
+        -- Handle character respawns
+        fovConnections.characterAdded = localPlayer.CharacterAdded:Connect(function()
+            updateFOV()
+        end)
+        
+        -- Initial update
+        updateFOV()
+    else
+        -- Reset to default FOV
+        currentFOV = 90
+        updateFOV()
+    end
+end
+
+-- Toggle
+FOVSection:AddToggle({
+    text = "Toggle FOV",
+    flag = "FOV_Toggle",
+    callback = function(v)
+        manageFOVUpdates(v)
+    end
+})
+
+-- FOV Slider
+FOVSection:AddSlider({
+    text = "FOV Value",
+    flag = "FOV_Value",
+    min = 0,
+    max = 120,
+    increment = 0.1,
+    default = 70,
+    callback = function(v)
+        currentFOV = v
+        if library.flags.FOV_Toggle then
+            updateFOV()
+        end
+    end
+})
+-- Enhanced Loot Inventory Checker Section
+local LootInventorySection = VisualsTab:AddSection("Inventory Check (BETA)", 6)
+
+-- Loot inventory variables
+local lootInventoryText = nil
+local lastLootInventory = ""
+local lootInventoryUpdateConnection = nil
+local currentTargetPlayer = nil
+local cachedLootData = {}
+
+-- Add color to cheat configuration
+Cheat.Options.Visuals.LootColor = Color3.fromRGB(255, 255, 255)
+
+-- Function to recursively scan for loot in folders
+local function ScanForLoot(folder, path)
+    local loot = {}
+    
+    for _, item in ipairs(folder:GetChildren()) do
+        -- Add the current item
+        table.insert(loot, {
+            name = item.Name,
+            path = path .. item.Name,
+            type = item.ClassName
+        })
+        
+        -- Recursively scan subfolders
+        if item:IsA("Folder") then
+            local subLoot = ScanForLoot(item, path .. item.Name .. ".")
+            for _, subItem in ipairs(subLoot) do
+                table.insert(loot, subItem)
+            end
+        end
+    end
+    
+    return loot
+end
+
+-- Function to cache enemy loot data
+local function CacheEnemyLoot(player)
+    if not player then return end
+    
+    local playerName = player.Name
+    if not cachedLootData[playerName] then
+        cachedLootData[playerName] = {
+            loot = {},
+            lastUpdate = 0
+        }
+    end
+    
+    local data = cachedLootData[playerName]
+    
+    -- Update cache if older than 5 seconds
+    if os.time() - data.lastUpdate > 5 then
+        data.loot = {}
+        
+        -- Get player folder
+        local playerFolder = ReplicatedStorage.Players:FindFirstChild(playerName)
+        if playerFolder then
+            -- Scan all relevant folders
+            local foldersToScan = {"Inventory", "Clothing", "Armor"}
+            for _, folderName in ipairs(foldersToScan) do
+                local folder = playerFolder:FindFirstChild(folderName)
+                if folder then
+                    local folderLoot = ScanForLoot(folder, folderName .. ".")
+                    for _, item in ipairs(folderLoot) do
+                        table.insert(data.loot, item)
+                    end
+                end
+            end
+            
+            -- Special scan for Clothing items with Inventory
+            local clothingFolder = playerFolder:FindFirstChild("Clothing")
+            if clothingFolder then
+                for _, clothingItem in ipairs(clothingFolder:GetChildren()) do
+                    if clothingItem:FindFirstChild("Inventory") then
+                        local clothingLoot = ScanForLoot(clothingItem.Inventory, "Clothing." .. clothingItem.Name .. ".Inventory.")
+                        for _, item in ipairs(clothingLoot) do
+                            table.insert(data.loot, item)
+                        end
+                    end
+                end
+            end
+        end
+        
+        data.lastUpdate = os.time()
+    end
+    
+    return data
+end
+
+-- Function to get formatted enemy loot
+local function GetEnemyLootString(player)
+    if not player then return "No target selected" end
+    
+    local data = CacheEnemyLoot(player)
+    local lootStr = player.Name .. "'s Loot:\n"
+    
+    -- Format loot
+    if #data.loot > 0 then
+        for _, item in ipairs(data.loot) do
+            -- Highlight inventory items in clothing
+            if string.find(item.path, "Clothing.*%.Inventory%.") then
+                lootStr = lootStr .. "  • [CLOTHING] " .. item.path .. "\n"
+            else
+                lootStr = lootStr .. "  • " .. item.path .. "\n"
+            end
+        end
+    else
+        lootStr = lootStr .. "  • No loot found\n"
+    end
+    
+    return lootStr
+end
+
+-- Function to update loot inventory display
+local function UpdateLootInventoryDisplay()
+    if not lootInventoryText then return end
+    
+    local newLoot = GetEnemyLootString(currentTargetPlayer)
+    if newLoot ~= lastLootInventory then
+        lootInventoryText.Text = newLoot
+        lastLootInventory = newLoot
+    end
+    
+    -- Update position
+    if library.flags.LootInvX and library.flags.LootInvY then
+        lootInventoryText.Position = Vector2.new(library.flags.LootInvX, library.flags.LootInvY)
+    end
+    
+    -- Update color
+    if library.flags.LootInvColor then
+        lootInventoryText.Color = library.flags.LootInvColor
+    end
+end
+
+-- Function to start loot inventory monitoring
+local function StartLootInventoryMonitoring()
+    if lootInventoryText then return end
+    
+    -- Create text display
+    lootInventoryText = Drawing.new("Text")
+    lootInventoryText.Visible = true
+    lootInventoryText.Color = library.flags.LootInvColor or Color3.new(1, 1, 1)
+    lootInventoryText.Size = 16
+    lootInventoryText.Text = "Selecting target..."
+    lootInventoryText.Outline = true
+    lootInventoryText.OutlineColor = Color3.new(0, 0, 0)
+    lootInventoryText.ZIndex = 10
+    
+    -- Set initial position
+    lootInventoryText.Position = Vector2.new(
+        library.flags.LootInvX or 50,
+        library.flags.LootInvY or 50
+    )
+    
+    -- Create update connection
+    lootInventoryUpdateConnection = RunService.Heartbeat:Connect(function()
+        -- Get closest enemy character
+        local closestEnemyChar = GetClosestPlayer()
+        
+        if closestEnemyChar then
+            -- Get the player from the character
+            local player = Players:GetPlayerFromCharacter(closestEnemyChar)
+            
+            if player and player ~= currentTargetPlayer then
+                currentTargetPlayer = player
+                lootInventoryText.Text = "Loading " .. player.Name .. "'s loot..."
+                -- Cache immediately
+                CacheEnemyLoot(player)
+            end
+        end
+        
+        -- Always update display
+        UpdateLootInventoryDisplay()
+    end)
+    
+    library:SendNotification("Loot Inventory Checker Enabled", 3)
+end
+
+-- Function to stop loot inventory monitoring
+local function StopLootInventoryMonitoring()
+    if lootInventoryText then
+        lootInventoryText:Remove()
+        lootInventoryText = nil
+    end
+    
+    if lootInventoryUpdateConnection then
+        lootInventoryUpdateConnection:Disconnect()
+        lootInventoryUpdateConnection = nil
+    end
+    
+    currentTargetPlayer = nil
+    lastLootInventory = ""
+    
+    library:SendNotification("Loot Inventory Checker Disabled", 3)
+end
+
+-- Add UI elements
+LootInventorySection:AddToggle({
+    text = "Check Inventory (BETA)",
+    state = false,
+    flag = "LootInventoryCheckToggle",
+    callback = function(v)
+        if v then
+            StartLootInventoryMonitoring()
+        else
+            StopLootInventoryMonitoring()
+        end
+    end
+})
+
+LootInventorySection:AddSlider({
+    text = "Custom X",
+    flag = "LootInvX",
+    suffix = "px",
+    min = 0,
+    max = 2000,
+    value = 50,
+    callback = function(v)
+        if lootInventoryText then
+            lootInventoryText.Position = Vector2.new(v, lootInventoryText.Position.Y)
+        end
+    end
+})
+
+LootInventorySection:AddSlider({
+    text = "Custom Y",
+    flag = "LootInvY",
+    suffix = "px",
+    min = 0,
+    max = 2000,
+    value = 50,
+    callback = function(v)
+        if lootInventoryText then
+            lootInventoryText.Position = Vector2.new(lootInventoryText.Position.X, v)
+        end
+    end
+})
+
+-- Add color picker for loot text
+LootInventorySection:AddColor({
+    text = "Text Color",
+    color = Color3.fromRGB(255, 255, 255),
+    flag = "LootInvColor",
+    callback = function(newColor)
+        Cheat.Options.Visuals.LootColor = newColor
+        if lootInventoryText then
+            lootInventoryText.Color = newColor
+        end
+    end
+})
+
+-- ... (rest of your script remains the same) ...
+
+VisualsSection1:AddToggle({
+    text = "OFF Shadows",
+    flag = "ShadowsToggle",
+    state = true,
+    callback = function(state)
+        Lighting.GlobalShadows = state
+        Cheat.Options.Visuals.Shadows.Enabled = state
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "No Bloom",
+    flag = "BloomToggle",
+    state = true,
+    callback = function(state)
+        Lighting.Bloom.Enabled = state
+        Cheat.Options.Visuals.Bloom.Enabled = state
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "No WaterBlur",
+    flag = "WaterBlurToggle",
+    state = true,
+    callback = function(state)
+        if state then
+            Cheat.Options.Visuals.WaterBlur.Size = Lighting.WaterBlur.Size
+            Lighting.WaterBlur.Size = 0
+        else
+            Lighting.WaterBlur.Size = Cheat.Options.Visuals.WaterBlur.Size
+        end
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "No Clouds",
+    flag = "CloudsToggle",
+    state = true,
+    callback = function(state)
+        Terrain.Clouds.Enabled = state
+        Cheat.Options.Visuals.Clouds.Enabled = state
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Fullbright Moderation",
+    flag = "FullbrightToggle",
+    callback = function(state)
+        Lighting.Fullbright.Enabled = state
+        Cheat.Options.Visuals.Fullbright.Enabled = state
+    end
+})
+
+-- Lighting Settings
+local function to255(color)
+    return Color3.fromRGB(
+        math.floor(color.R * 255 + 0.5),
+        math.floor(color.G * 255 + 0.5),
+        math.floor(color.B * 255 + 0.5)
+    )
+end
+
+local function clampColor(color)
+    return Color3.new(
+        math.clamp(color.R, 0, 1),
+        math.clamp(color.G, 0, 1),
+        math.clamp(color.B, 0, 1)
+    )
+end
+
+local OriginalAmbient = Lighting.Ambient
+
+VisualsSection2:AddColor({
+    text = "Ambient",
+    color = to255(OriginalAmbient),
+    flag = "AmbientColor",
+    callback = function(newColor)
+        Lighting.Ambient = clampColor(newColor)
+        Cheat.Options.Visuals.Ambient.Color = clampColor(newColor)
+    end
+})
+
+local ESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mixvpnv2/Espbruh/refs/heads/main/espb", true))()
+ESP:Init()
+
+local VisualsSection1 = VisualsTab:AddSection("ESP Settings", 1)
+
+-- ESP Toggles
+VisualsSection1:AddToggle({
+    text = "ESP Enabled",
+    flag = "ESPToggle",
+    state = true,
+    callback = function(v)
+        ESP:Toggle(v)
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Box ESP",
+    flag = "BoxESPToggle",
+    state = true,
+    callback = function(v)
+        ESP.Settings.Box = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Chams",
+    flag = "ChamsToggle",
+    state = false,
+    callback = function(v)
+        ESP.Settings.Chams = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Health Bar",
+    flag = "HealthBarToggle",
+    state = true,
+    callback = function(v)
+        ESP.Settings.HealthBar = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Tracers",
+    flag = "TracerToggle",
+    state = false,
+    callback = function(v)
+        ESP.Settings.Tracer = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Torso View Angles",
+    flag = "ViewAngleToggle",
+    state = false,
+    callback = function(v)
+        ESP.Settings.ViewAngle = v
+    end
+})
+VisualsSection1:AddToggle({
+    text = "Head View Angle",
+    flag = "HeadViewAngleToggle",
+    state = true,
+    callback = function(v)
+        ESP.Settings.HeadViewAngle = v
+    end
+})
+VisualsSection1:AddToggle({
+    text = "Off-screen Arrows",
+    flag = "OffScreenArrowToggle",
+    state = false,
+    callback = function(v)
+        ESP.Settings.OffScreenArrow = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Outline",
+    flag = "OutlineToggle",
+    state = false,
+    callback = function(v)
+        ESP.Settings.Outline = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Bold Text",
+    flag = "BoldTextToggle",
+    callback = function(v)
+        ESP.Settings.BoldText = v
+    end
+})
+
+-- ESP Configuration
+VisualsSection1:AddSlider({
+    text = "Max Distance",
+    flag = "MaxDistanceSlider",
+    suffix = "m",
+    min = 0,
+    max = 5000,
+    value = 5000,
+    callback = function(v)
+        ESP.Settings.MaxDistance = v
+    end
+})
+
+VisualsSection1:AddSlider({
+    text = "Arrow Radius",
+    flag = "ArrowRadiusSlider",
+    min = 1,
+    max = 100,
+    value = 30,
+    callback = function(v)
+        ESP.Settings.ArrowRadius = v
+    end
+})
+
+VisualsSection1:AddSlider({
+    text = "Arrow Size",
+    flag = "ArrowSizeSlider",
+    min = 1,
+    max = 5,
+    value = 2,
+    callback = function(v)
+        ESP.Settings.ArrowSize = v
+    end
+})
+
+VisualsSection1:AddSlider({
+    text = "Text Size",
+    flag = "TextSizeSlider",
+    min = 1,
+    max = 24,
+    value = 12,
+    callback = function(v)
+        ESP.Settings.TextSize = v
+    end
+})
+-- Box Size Controls
+VisualsSection1:AddSlider({
+    text = "Box Height",
+    flag = "BoxHeightSlider",
+    min = 1,
+    max = 20,
+    value = 6,
+    callback = function(v)
+        ESP.Settings.BoxHeight = v
+    end
+})
+
+VisualsSection1:AddSlider({
+    text = "Box Width",
+    flag = "BoxWidthSlider",
+    min = 1,
+    max = 20,
+    value = 20,
+    callback = function(v)
+        ESP.Settings.BoxWidth = v
+    end
+})
+
+VisualsSection1:AddSlider({
+    text = "Box Scale",
+    flag = "BoxScaleSlider",
+    min = 0.1,
+    max = 3,
+    float = 0.1,
+    value = 1.0,
+    callback = function(v)
+        ESP.Settings.BoxScale = v
+    end
+})
+VisualsSection1 :AddList({
+    text = "Text Font",
+    flag = "TextFontList",
+    selected = "Roboto",
+    values = {"Roboto", "Arial", "Source Sans", "Source Sans Pro", "Code", "Gotham", "SciFi", "Arcade", "Fantasy", "Legacy"},
+    callback = function(v)
+        ESP.Settings.TextFont = v
+    end
+})
+
+-- Add team color options
+VisualsSection1:AddToggle({
+    text = "Team Check",
+    flag = "TeamCheckToggle",
+    callback = function(v)
+        ESP.Settings.TeamCheck = v
+    end
+})
+
+VisualsSection1:AddToggle({
+    text = "Team Colors",
+    flag = "TeamColorToggle",
+    state = true,
+    callback = function(v)
+        ESP.Settings.TeamColor = v
+    end
+})
+
+-- Color Customization
+VisualsSection1:AddColor({
+    text = "Box Color",
+    color = ESP.Settings.BoxColor,
+    flag = "BoxColorPicker",
+    callback = function(newColor)
+        ESP.Settings.BoxColor = newColor
+    end
+})
+
+VisualsSection1:AddColor({
+    text = "Chams Color",
+    color = ESP.Settings.ChamsColor,
+    flag = "ChamsColorPicker",
+    callback = function(newColor)
+        ESP.Settings.ChamsColor = newColor
+    end
+})
+
+VisualsSection1:AddColor({
+    text = "Text Color",
+    color = ESP.Settings.TextColor,
+    flag = "TextColorPicker",
+    callback = function(newColor)
+        ESP.Settings.TextColor = newColor
+    end
+})
+
+VisualsSection1:AddColor({
+    text = "Tracer Color",
+    color = ESP.Settings.TracerColor,
+    flag = "TracerColorPicker",
+    callback = function(newColor)
+        ESP.Settings.TracerColor = newColor
+    end
+})
+
+VisualsSection1:AddColor({
+    text = "Torso   View Angle Color",
+    color = ESP.Settings.ViewAngleColor,
+    flag = "ViewAngleColorPicker",
+    callback = function(newColor)
+        ESP.Settings.ViewAngleColor = newColor
+    end
+})
+
+VisualsSection1:AddColor({
+    text = "Arrow Color",
+    color = ESP.Settings.ArrowColor,
+    flag = "ArrowColorPicker",
+    callback = function(newColor)
+        ESP.Settings.ArrowColor = newColor
+    end
+})
+
+VisualsSection1:AddColor({
+    text = "Health Bar Color",
+    color = ESP.Settings.HealthBarColor,
+    flag = "HealthBarColorPicker",
+    callback = function(newColor)
+        ESP.Settings.HealthBarColor = newColor
+    end
+})
+-- Head View Angle Color
+VisualsSection1:AddColor({
+    text = "Head View Angle Color",
+    color = ESP.Settings.HeadViewAngleColor,
+    flag = "HeadViewAngleColorPicker",
+    callback = function(newColor)
+        ESP.Settings.HeadViewAngleColor = newColor
+    end
+})
+
+VisualsSection1:AddSlider({
+    text = "Box Scale",
+    flag = "BoxScaleSlider",
+    min = 0.1,
+    max = 3,
+    float = 0.1,
+    value = 1.0,
+    callback = function(v)
+        ESP.Settings.BoxScale = v
+    end
+})
+VisualsSection1:AddSlider({
+    text = "Box Scale",
+    flag = "BoxScaleSlider",
+    min = 0.1,
+    max = 3,
+    float = 0.1,
+    value = 1.0,
+    callback = function(v)
+        ESP.Settings.BoxScale = v
+    end
+})
+
+-- Foliage Settings
+VisualsSection3:AddToggle({
+    text = "Remove (Foliage)",
+    flag = "FoliageToggle",
+    callback = function(Value)
+        Cheat.Options.Visuals.Foliage.Enabled = Value
+        
+        if workspace:FindFirstChild("SpawnerZones") and workspace.SpawnerZones:FindFirstChild("Foliage") then
+            for _, v in ipairs(workspace.SpawnerZones.Foliage:GetChildren()) do
+                for _, f in ipairs(v:GetChildren()) do
+                    for _, s in ipairs(f:GetChildren()) do
+                        if s:IsA("MeshPart") and s.Color == Color3.fromRGB(163, 162, 165) then
+                            s.Transparency = Value and 1 or 0
+                        end 
+                    end
+                end
+            end
+        end
+    end
+})
+
+VisualsSection3:AddToggle({
+    text = "Remove (grass)",
+    flag = "GrassToggle",
+    callback = function(Value)
+        Cheat.Options.Visuals.Grass.Enabled = Value
+        sethiddenproperty(Workspace.Terrain, "Decoration", not Value)
+    end
+})
+
+-- Add time control slider with freeze option
+VisualsSection3:AddToggle({
+    text = "Freeze Time",
+    flag = "FreezeTimeToggle",
+    state = false,
+    callback = function(v)
+        Cheat.Options.Visuals.FreezeTime = v
+    end
+})
+
+VisualsSection3:AddSlider({
+    enabled = true,
+    text = "Time of Day",
+    flag = "TimeSlider",
+    suffix = " hours",
+    min = 0,
+    max = 24,
+    increment = 0.1,
+    value = Lighting.ClockTime,
+    callback = function(v)
+        Lighting.ClockTime = v
+        Cheat.Options.Visuals.TimeOfDay = v
+    end
+})
+
+-- Add this to your RunService loop to maintain frozen time
+RunService.RenderStepped:Connect(function()
+    if Cheat.Options.Visuals.FreezeTime then
+        Lighting.ClockTime = Cheat.Options.Visuals.TimeOfDay
+    end
+end)
+
+-- UI Settings
+VisualsSection4:AddToggle({
+    text = "Off ScreenEffects",
+    flag = "ScreenEffectsToggle",
+    state = true,
+    callback = function(state)
+        if Client.PlayerGui:FindFirstChild("MainGui") then
+            local screenEffects = Client.PlayerGui.MainGui.MainFrame:FindFirstChild("ScreenEffects")
+            if screenEffects then
+                screenEffects.Visible = state
+                Cheat.Options.Visuals.ScreenEffects.Enabled = state
+            end
+        end
+    end
+})
+
+VisualsSection4:AddToggle({
+    text = "Hide server",
+    flag = "ServerInfoToggle",
+    state = true,
+    callback = function(state)
+        if Client.PlayerGui:FindFirstChild("ServerInfo") then
+            local serverInfo = Client.PlayerGui.ServerInfo.Frame:FindFirstChild("serverInfo")
+            if serverInfo then
+                serverInfo.Visible = state
+                Cheat.Options.Visuals.ServerInfo.Visible = state
+            end
+        end
+    end
+})
+
+-- Configuration section
+local ArmEnabled = false
+local ArmColor = Color3.new(0.458824, 0.466667, 1.000000)
+local ArmMaterial = Enum.Material.ForceField
+
+local HighlightEnabled = false
+local HighlightFillColor = Color3.new(1, 1, 0)
+local HighlightFillTransparency = 0.5
+local HighlightOutlineColor = Color3.new(1, 0, 0)
+local HighlightOutlineTransparency = 0
+local HighlightDepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+-- Store references to the single highlights
+local ViewModelR15Highlight = nil
+local CameraViewModelHighlight = nil
+
+local function ModifyParts(obj)
+    for _, part in ipairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("MeshPart") then
+            part.Material = ArmMaterial
+            part.Color = ArmColor
+        end
+    end
+end
+
+local function RemoveSurfaces(obj)
+    for _, surface in ipairs(obj:GetDescendants()) do
+        if surface:IsA("SurfaceAppearance") then
+            surface:Destroy()
+        end
+    end
+end
+
+-- Apply ONE highlight to the ViewModelR15 model itself
+local function ApplyViewModelR15Highlight()
+    local viewModelR15 = game:GetService("ReplicatedStorage").ViewModels:FindFirstChild("ViewModelR15")
+    if not viewModelR15 then return end
+    
+    -- Remove existing highlight if any
+    if ViewModelR15Highlight then
+        ViewModelR15Highlight:Destroy()
+        ViewModelR15Highlight = nil
+    end
+    
+    -- Create ONE highlight on the ViewModelR15 model
+    ViewModelR15Highlight = Instance.new("Highlight")
+    ViewModelR15Highlight.Parent = viewModelR15
+    
+    -- Set highlight properties
+    ViewModelR15Highlight.FillColor = HighlightFillColor
+    ViewModelR15Highlight.FillTransparency = HighlightFillTransparency
+    ViewModelR15Highlight.OutlineColor = HighlightOutlineColor
+    ViewModelR15Highlight.OutlineTransparency = HighlightOutlineTransparency
+    ViewModelR15Highlight.DepthMode = HighlightDepthMode
+end
+
+-- Apply ONE highlight to the workspace Camera ViewModel
+local function ApplyCameraViewModelHighlight()
+    local camera = workspace.Camera
+    local viewModel = camera and camera:FindFirstChild("ViewModel")
+    if not viewModel then return end
+    
+    -- Remove existing highlight if any
+    if CameraViewModelHighlight then
+        CameraViewModelHighlight:Destroy()
+        CameraViewModelHighlight = nil
+    end
+    
+    -- Create ONE highlight on the Camera ViewModel
+    CameraViewModelHighlight = Instance.new("Highlight")
+    CameraViewModelHighlight.Parent = viewModel
+    
+    -- Set highlight properties
+    CameraViewModelHighlight.FillColor = HighlightFillColor
+    CameraViewModelHighlight.FillTransparency = HighlightFillTransparency
+    CameraViewModelHighlight.OutlineColor = HighlightOutlineColor
+    CameraViewModelHighlight.OutlineTransparency = HighlightOutlineTransparency
+    CameraViewModelHighlight.DepthMode = HighlightDepthMode
+end
+
+-- Remove the single highlights
+local function RemoveHighlights()
+    if ViewModelR15Highlight then
+        ViewModelR15Highlight:Destroy()
+        ViewModelR15Highlight = nil
+    end
+    if CameraViewModelHighlight then
+        CameraViewModelHighlight:Destroy()
+        CameraViewModelHighlight = nil
+    end
+end
+
+-- Update the single highlight properties immediately
+local function UpdateHighlightsImmediately()
+    if ViewModelR15Highlight then
+        ViewModelR15Highlight.FillColor = HighlightFillColor
+        ViewModelR15Highlight.FillTransparency = HighlightFillTransparency
+        ViewModelR15Highlight.OutlineColor = HighlightOutlineColor
+        ViewModelR15Highlight.OutlineTransparency = HighlightOutlineTransparency
+        ViewModelR15Highlight.DepthMode = HighlightDepthMode
+    end
+    if CameraViewModelHighlight then
+        CameraViewModelHighlight.FillColor = HighlightFillColor
+        CameraViewModelHighlight.FillTransparency = HighlightFillTransparency
+        CameraViewModelHighlight.OutlineColor = HighlightOutlineColor
+        CameraViewModelHighlight.OutlineTransparency = HighlightOutlineTransparency
+        CameraViewModelHighlight.DepthMode = HighlightDepthMode
+    end
+end
+
+-- Main modification loop
+task.spawn(function()
+    while true do
+        -- Arm modifications for ViewModelR15 and Camera ViewModel
+        if ArmEnabled then
+            -- Apply to ViewModelR15
+            local viewModelR15 = game:GetService("ReplicatedStorage").ViewModels:FindFirstChild("ViewModelR15")
+            if viewModelR15 then
+                ModifyParts(viewModelR15)
+                RemoveSurfaces(viewModelR15)
+            end
+            
+            -- Apply to workspace Camera ViewModel
+            local camera = workspace.Camera
+            local viewModel = camera and camera:FindFirstChild("ViewModel")
+            if viewModel then
+                ModifyParts(viewModel)
+                RemoveSurfaces(viewModel)
+                
+                -- Also check for weapon items within ViewModel
+                local weaponItem = viewModel:FindFirstChild("Item")
+                if weaponItem then
+                    ModifyParts(weaponItem)
+                    RemoveSurfaces(weaponItem)
+                end
+            end
+        end
+        
+        -- Highlight for ViewModelR15 and Camera ViewModel - SINGLE HIGHLIGHTS
+        if HighlightEnabled then
+            -- Apply/Update ViewModelR15 highlight
+            local viewModelR15 = game:GetService("ReplicatedStorage").ViewModels:FindFirstChild("ViewModelR15")
+            if viewModelR15 then
+                if not ViewModelR15Highlight then
+                    ApplyViewModelR15Highlight()
+                else
+                    -- Ensure highlight is still there, recreate if missing
+                    if not ViewModelR15Highlight.Parent then
+                        ApplyViewModelR15Highlight()
+                    end
+                end
+            end
+            
+            -- Apply/Update Camera ViewModel highlight
+            local camera = workspace.Camera
+            local viewModel = camera and camera:FindFirstChild("ViewModel")
+            if viewModel then
+                if not CameraViewModelHighlight then
+                    ApplyCameraViewModelHighlight()
+                else
+                    -- Ensure highlight is still there, recreate if missing
+                    if not CameraViewModelHighlight.Parent then
+                        ApplyCameraViewModelHighlight()
+                    end
+                end
+            end
+            
+            -- Update highlights with current settings
+            UpdateHighlightsImmediately()
+        else
+            RemoveHighlights()
+        end
+        
+        task.wait(0.1)
+    end
+end)
+
+-- UI Components
+VisualsSection5:AddToggle({
+    text = "Arm Modifications",
+    state = false,
+    tooltip = "Toggle arm visual modifications",
+    callback = function(state)
+        ArmEnabled = state
+    end
+})
+
+VisualsSection5:AddColor({
+    text = "Arm Color",
+    tooltip = "Change arm material color",
+    color = Color3.new(0.458824, 0.466667, 1),
+    callback = function(newColor)
+        ArmColor = newColor
+    end
+})
+
+VisualsSection5:AddList({
+    text = "Arm Material", 
+    tooltip = "Select material type for arms",
+    selected = "ForceField",
+    values = {"ForceField", "Neon", "Glass", "Foil", "Concrete"},
+    callback = function(selection)
+        ArmMaterial = Enum.Material[selection]
+    end
+})
+
+-- Highlight UI Components - SINGLE HIGHLIGHTS on both ViewModels
+VisualsSection5:AddToggle({
+    text = "ViewModel Highlight",
+    state = false,
+    tooltip = "Toggle single highlight on ViewModelR15 and Camera ViewModel",
+    callback = function(state)
+        HighlightEnabled = state
+    end
+})
+
+VisualsSection5:AddColor({
+    text = "Highlight Fill Color",
+    tooltip = "Change highlight fill color",
+    color = Color3.new(1, 1, 0),
+    callback = function(newColor)
+        HighlightFillColor = newColor
+        UpdateHighlightsImmediately() -- Immediate update
+    end
+})
+
+VisualsSection5:AddSlider({
+    text = "Fill Transparency",
+    tooltip = "Adjust highlight fill transparency",
+    value = 0.5,
+    min = 0,
+    max = 1,
+    increment = 0.1,
+    risky = false,
+    suffix = "",
+    dragging = true,
+    focused = false,
+    flag = "Slider_1",
+    callback = function(value)
+        HighlightFillTransparency = value
+        UpdateHighlightsImmediately() -- Immediate update
+    end
+})
+
+VisualsSection5:AddColor({
+    text = "Outline Color",
+    tooltip = "Change highlight outline color",
+    color = Color3.new(1, 0, 0),
+    callback = function(newColor)
+        HighlightOutlineColor = newColor
+        UpdateHighlightsImmediately() -- Immediate update
+    end
+})
+
+VisualsSection5:AddSlider({
+    text = "Outline Transparency",
+    tooltip = "Adjust highlight outline transparency",
+    value = 0,
+    min = 0,
+    max = 1,
+    increment = 0.1,
+    risky = false,
+    suffix = "",
+    dragging = true,
+    focused = false,
+    flag = "Slider_2",
+    callback = function(value)
+        HighlightOutlineTransparency = value
+        UpdateHighlightsImmediately() -- Immediate update
+    end
+})
+
+VisualsSection5:AddList({
+    text = "Depth Mode",
+    tooltip = "Select highlight depth mode",
+    selected = "AlwaysOnTop",
+    values = {"AlwaysOnTop", "Occluded"},
+    callback = function(selection)
+        HighlightDepthMode = Enum.HighlightDepthMode[selection]
+        UpdateHighlightsImmediately() -- Immediate update
+    end
+})
+VisualsSection5:AddButton({
+    enabled = true,
+    text = "Fur Arm Skin",
+    callback = function()
+-- Get all players
+local playersFolder = game:GetService("ReplicatedStorage"):WaitForChild("Players")
+local newWeaponName = "DV2"
+
+-- Process all players
+for _, playerFolder in ipairs(playersFolder:GetChildren()) do
+    -- Skip if not a player folder
+    if not playerFolder:IsA("Folder") then continue end
+    
+    local equipment = playerFolder:FindFirstChild("Equipment")
+    if not equipment then continue end
+    
+    -- Rename DV2 to AnarchyTomahawk
+    if equipment:FindFirstChild("DV2") then
+        equipment.DV2.Name = newWeaponName
+        print("Renamed weapon for", playerFolder.Name)
+    end
+    
+    -- Get the weapon
+    local weapon = equipment:FindFirstChild(newWeaponName)
+    if not weapon then continue end
+    
+    -- Update SettingsModule
+    local settingsModule = weapon:FindFirstChild("SettingsModule")
+    if settingsModule then
+        local success, moduleTable = pcall(require, settingsModule)
+        if success and moduleTable then
+            -- Update animations
+            moduleTable.Animations = {
+	["FirstPerson"] = {
+		["Equip"] = "rbxassetid://9602813265",
+		["Idle"] = "rbxassetid://9602814995",
+		["Use"] = "rbxassetid://9602882117",
+		["UseAlt"] = "rbxassetid://9602837643",
+		["Stab"] = "rbxassetid://9602895599",
+		["Inspect"] = "rbxassetid://9602906201"
+	},
+	["ThirdPerson"] = {
+		["Equip"] = "rbxassetid://11305769153",
+		["Idle"] = "rbxassetid://11305800944",
+		["Sprint"] = "rbxassetid://11305866272",
+		["Use"] = "rbxassetid://11305837531",
+		["UseAlt"] = "rbxassetid://11305821864",
+		["Stab"] = "rbxassetid://11305793672",
+		["Inspect"] = "rbxassetid://8219716861"
+	}
+            }
+            
+            -- Update other config values
+            moduleTable.weaponOffSet = CFrame.new(0.5, -1.51, -1)
+            moduleTable.sprintOffSet = Vector3.new(0, 0, -0.4)
+            
+            print("Updated animations for", playerFolder.Name)
+        else
+            warn("Failed to load module for", playerFolder.Name)
+        end
+    else
+        warn("SettingsModule not found for", playerFolder.Name)
+    end
+end
+
+print("All players' weapons updated!")
+
+-- Update local player's equipped weapon
+local player = game.Players.LocalPlayer
+local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+local tool = player.Backpack:FindFirstChild(newWeaponName) or 
+             player.Backpack:FindFirstChild("DV2") or
+             (player.Character and (player.Character:FindFirstChild(newWeaponName) or 
+                                    player.Character:FindFirstChild("DV2")))
+
+if humanoid and tool then
+    -- Rename tool if needed
+    if tool.Name == "DV2" then
+        tool.Name = newWeaponName
+    end
+    
+    -- Re-equip
+    humanoid:UnequipTools()
+    task.wait(0.5)
+    humanoid:EquipTool(tool)
+    print("Re-equipped weapon for local player")
+end
+wait(0.01)
+local assetId = "12578481087"
+local textureUrl = "http://www.roblox.com/asset/?id=" .. assetId
+
+-- Function to find ViewModel and apply texture
+local function applyTexture()
+    local viewModel = workspace:FindFirstChild("Camera", true) and workspace.Camera:FindFirstChild("ViewModel")
+    if not viewModel then return end
+    
+    local clothing = viewModel:FindFirstChild("Clothing")
+    if not clothing then return end
+    
+    if clothing:IsA("ShirtGraphic") then
+        clothing.Graphic = textureUrl
+    elseif clothing:IsA("Shirt") then
+        clothing.ShirtTemplate = textureUrl
+    elseif clothing:IsA("Pants") then
+        clothing.PantsTemplate = textureUrl
+    end
+end
+
+-- Auto-update system
+spawn(function()
+    while task.wait(1) do
+        applyTexture()
+    end
+end)
+
+-- Apply immediately
+applyTexture()
+    end
+})
+
+-- Movement Tab
+local MovementSection1 = MovementTab:AddSection("Movement Hacks", 1)
+local MovementSection2 = MovementTab:AddSection("Teleportation", 2)
+
+-- Water Walk
+local WaterWalkFolder = workspace:FindFirstChild("WaterWalk") or Instance.new("Folder", workspace)
+WaterWalkFolder.Name = "WaterWalk"
+
+local function createWaterPlatform(position)
+    local platform = Instance.new("Part")
+    platform.Size = Vector3.new(60, 1, 60)
+    platform.Anchored = true
+    platform.CanCollide = true
+    platform.CanQuery = false
+    platform.CanTouch = false
+    platform.Material = Enum.Material.Metal
+    platform.Position = position
+    platform.Parent = WaterWalkFolder
+    platform.Transparency = 1
+    return platform
+end
+
+local function cleanWaterWalk()
+    for _, v in pairs(WaterWalkFolder:GetChildren()) do
+        if v:IsA("Part") then
+            v:Destroy()
+        end
+    end
+end
+
+MovementSection1:AddToggle({
+    text = "Water Walk",
+    flag = "WaterWalkToggle",
+    callback = function(v)
+        if v then
+            Cheat.Connections.WaterWalkConnection = RunService.Heartbeat:Connect(function()
+                if Client.Character and Client.Character:FindFirstChild("HumanoidRootPart") then
+                    local rootPos = Client.Character.HumanoidRootPart.Position
+                    local rayOrigin = rootPos + Vector3.new(0, 5, 0)
+                    local rayDirection = Vector3.new(0, -10, 0)
+                    
+                    local raycastParams = RaycastParams.new()
+                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                    raycastParams.FilterDescendantsInstances = {Client.Character}
+                    
+                    local rayResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+                    
+                    if rayResult and rayResult.Material == Enum.Material.Water then
+                        createWaterPlatform(rayResult.Position)
+                    end
+                end
+            end)
+        elseif Cheat.Connections.WaterWalkConnection then
+            Cheat.Connections.WaterWalkConnection:Disconnect()
+            Cheat.Connections.WaterWalkConnection = nil
+            cleanWaterWalk()
+        end
+    end
+})
+
+-- Teleport Walk
+MovementSection2:AddToggle({
+    text = "Toggle TP Walk",
+    flag = "TPWalkToggle",
+    callback = function(v)
+        if v then
+            Cheat.Connections.TPWalkConnection = RunService.Heartbeat:Connect(function(delta)
+                if Client.Character then
+                    local humanoid = Client.Character:FindFirstChildOfClass("Humanoid")
+                    if humanoid and humanoid.MoveDirection.Magnitude > 0 then
+                        Client.Character:TranslateBy(humanoid.MoveDirection * library.flags.TPWalkSpeed * delta * 10)
+                    end
+                end
+            end)
+        elseif Cheat.Connections.TPWalkConnection then
+            Cheat.Connections.TPWalkConnection:Disconnect()
+            Cheat.Connections.TPWalkConnection = nil
+        end
+    end
+})
+
+MovementSection2:AddSlider({
+    text = "TP Walk Speed",
+    flag = "TPWalkSpeed",
+    min = 0.1,
+    max = 5,
+    increment = 0.1,
+    value = 0.5,
+    callback = function(v) end
+})
+
+
+
+-- Misc Tab
+local MiscSection1 = MiscTab:AddSection("Utilities", 1)
+local MiscSection2 = MiscTab:AddSection("Sound", 2)
+local MiscSection3 = MiscTab:AddSection("Moderation", 3)
+local MiscSection4 = MiscTab:AddSection("Exploiting", 4)
+
+
+MiscSection4:AddButton({
+    text = "Hook FPS Module",
+    callback = function()
+        if HookFPSModule() then
+            StartAutoUpdate()
+            library:SendNotification("Auto-Update System Started", 3)
+        else
+            library:SendNotification("Failed to Hook FPS Module", 3)
+        end
+    end
+})
+
+MiscSection4:AddButton({
+    text = "Check Weapon Status",
+    callback = function()
+        local status = "Weapon Mods Status:\n"
+        status = status .. "Hooked: " .. tostring(IsHooked) .. "\n"
+        status = status .. "Instant Equip: " .. tostring(library.flags.InstantEquip) .. "\n"
+        status = status .. "Rapid Fire: " .. tostring(library.flags.RapidFire) .. "\n"
+        status = status .. "Fire Rate: " .. tostring(library.flags.FireRateValue) .. " RPS\n"
+        status = status .. "Bullet Manip: " .. tostring(library.flags.ManipulateBullets) .. "\n"
+        status = status .. "Bullet Count: " .. tostring(library.flags.BulletsValue)
+        
+        if CurrentWeapon then
+            status = status .. "\nWeapon: " .. tostring(CurrentWeapon.weapon and CurrentWeapon.weapon.Name or "Unknown")
+        else
+            status = status .. "\nWeapon: None"
+        end
+        
+        print(status)
+        library:SendNotification(status, 5)
+    end
+})
+
+MiscSection4:AddButton({
+    text = "Refresh Hooks",
+    callback = function()
+        -- Stop auto-update
+        AutoUpdate.Enabled = false
+        if AutoUpdate.Connection then
+            AutoUpdate.Connection:Disconnect()
+        end
+        
+        -- Restore original functions
+        if OriginalEquip then
+            local success, FPSModule = pcall(function()
+                return require(game:GetService("ReplicatedStorage").Modules.FPS)
+            end)
+            if success and FPSModule then
+                FPSModule.equip = OriginalEquip
+            end
+        end
+        
+        -- Clear current weapon
+        CurrentWeapon = nil
+        IsHooked = false
+        
+        -- Re-hook
+        wait(0.5)
+        if HookFPSModule() then
+            StartAutoUpdate()
+            library:SendNotification("Hooks Refreshed - Auto-Update Restarted", 3)
+        end
+    end
+})
+
+-- Auto-hook on script start
+spawn(function()
+    wait(2) -- Wait for game to load
+    if HookFPSModule() then
+        StartAutoUpdate()
+        library:SendNotification("Auto-Update System Started", 2)
+    end
+end)
+
+-- Auto-cleanup
+local function SafeCleanup()
+    -- Stop auto-update
+    AutoUpdate.Enabled = false
+    if AutoUpdate.Connection then
+        AutoUpdate.Connection:Disconnect()
+    end
+    
+    -- Restore original functions
+    if OriginalEquip then
+        local success, FPSModule = pcall(function()
+            return require(game:GetService("ReplicatedStorage").Modules.FPS)
+        end)
+        if success and FPSModule then
+            FPSModule.equip = OriginalEquip
+        end
+    end
+end
+
+-- Downward Teleportation Script
+local DOWNWARD_OFFSET = 10 -- Adjust this value to control descent distance (studs)
+
+local function TeleportDown()
+    if not Client.Character then return end
+    
+    local localChar = Client.Character
+    local localHum = localChar:FindFirstChildOfClass("Humanoid")
+    local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+    
+    if not localHum or not localRoot then return end
+    
+    -- Get current position and calculate new position
+    local currentPosition = localRoot.Position
+    local newPosition = currentPosition - Vector3.new(0, DOWNWARD_OFFSET, 0)
+    
+    -- Raycast to prevent going through floors
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localChar}
+    
+    local raycastResult = workspace:Raycast(currentPosition, Vector3.new(0, -DOWNWARD_OFFSET - 5, 0), raycastParams)
+    
+    -- Adjust position if collision detected
+    if raycastResult and raycastResult.Position.Y > newPosition.Y then
+        newPosition = raycastResult.Position + Vector3.new(0, 3, 0) -- 3 studs above surface
+    end
+    
+    -- Apply new position
+    localRoot.CFrame = CFrame.new(newPosition)
+end
+
+-- Add UI Elements
+MiscSection4:AddToggle({
+    text = "Downward Teleport",
+    state = false,
+    flag = "TeleportDownToggle",
+}):AddBind({
+    text = "Downward Teleport Key",
+    mode = "hold",
+    flag = "TeleportDownKey",
+    callback = function(v)
+        if v and library.flags.TeleportDownToggle then
+            TeleportDown()
+        end
+    end
+})
+
+local function GetClosestPlayer()
+    local closestPlayer, closestDistance = nil, math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Client and player.Character then
+            local character = player.Character
+            local humanoid = character:FindFirstChild("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and humanoid.Health > 0 and rootPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                
+                if onScreen then
+                    local screenPoint = Vector2.new(screenPos.X, screenPos.Y)
+                    local distance = (screenPoint - center).Magnitude
+                    
+                    if distance < closestDistance then
+                        closestPlayer = character
+                        closestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Define teleport function
+local function TeleportToPlayerAndSit()
+    if not Client.Character then return end
+    
+    local localChar = Client.Character
+    local localHum = localChar:FindFirstChildOfClass("Humanoid")
+    local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+    if not localHum or not localRoot then return end
+    
+    local targetChar = GetClosestPlayer()
+    if not targetChar then return end
+    
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return end
+    
+    local targetPosition = targetRoot.Position + Vector3.new(0, 5, 0)
+    localRoot.CFrame = CFrame.new(targetPosition)
+    
+    task.wait(0.1)
+    localHum.Sit = true
+end
+
+-- Create UI elements
+MiscSection4:AddToggle({
+    text = "Teleport to Player and Sit",
+    state = false,
+    flag = "TeleportSitToggle",
+}):AddBind({
+    text = "Teleport Key",
+    mode = "hold",
+    flag = "TeleportSitKey",
+    callback = function(v)
+        if v and library.flags.TeleportSitToggle then
+            TeleportToPlayerAndSit()
+        end
+    end
+})
+
+getgenv().DesyncEnabled = true
+
+-- Two Character Desync Visualizer
+local realCharacter = Instance.new("Part")
+realCharacter.Name = "RealCharacterVisualizer"
+realCharacter.Size = Vector3.new(2, 4, 1)
+realCharacter.Material = Enum.Material.Neon
+realCharacter.BrickColor = BrickColor.new("Bright green")
+realCharacter.Anchored = true
+realCharacter.CanCollide = false
+realCharacter.Transparency = 0.4
+realCharacter.Parent = workspace
+
+local fakeCharacter = Instance.new("Part")
+fakeCharacter.Name = "FakeCharacterVisualizer"
+fakeCharacter.Size = Vector3.new(2, 4, 1)
+fakeCharacter.Material = Enum.Material.Neon
+fakeCharacter.BrickColor = BrickColor.new("Bright red")
+fakeCharacter.Anchored = true
+fakeCharacter.CanCollide = false
+fakeCharacter.Transparency = 0.4
+fakeCharacter.Parent = workspace
+
+-- Connection beam between characters
+local connectionBeam = Instance.new("Beam")
+connectionBeam.Attachment0 = Instance.new("Attachment")
+connectionBeam.Attachment1 = Instance.new("Attachment")
+connectionBeam.Attachment0.Parent = realCharacter
+connectionBeam.Attachment1.Parent = fakeCharacter
+connectionBeam.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+connectionBeam.Width0 = 0.3
+connectionBeam.Width1 = 0.3
+connectionBeam.Parent = workspace
+
+-- Hide initially
+realCharacter.Transparency = 1
+fakeCharacter.Transparency = 1
+connectionBeam.Enabled = false
+
+local lastRealPosition = Vector3.new(0, 0, 0)
+local fakePositionOffset = Vector3.new(0, 0, 0)
+
+local function updateVisualizer(realPos, fakePos)
+    if not getgenv().DesyncEnabled then
+        realCharacter.Transparency = 1
+        fakeCharacter.Transparency = 1
+        connectionBeam.Enabled = false
+        return
+    end
+    
+    realCharacter.Transparency = 0.3
+    fakeCharacter.Transparency = 0.3
+    connectionBeam.Enabled = true
+    
+    realCharacter.Position = realPos
+    fakeCharacter.Position = fakePos
+    
+    -- Calculate distance between characters
+    local distance = (realPos - fakePos).Magnitude
+    
+    -- Update beam color based on distance (closer = green, farther = red)
+    local r = math.clamp(distance / 50, 0, 1)
+    local g = math.clamp(1 - (distance / 50), 0, 1)
+    local b = 0
+    connectionBeam.Color = ColorSequence.new(Color3.new(r, g, b))
+end
+
+local function clearUnwantedScripts(character)
+    for _, v in pairs(character:GetChildren()) do
+        if v:IsA("Script") and v.Name ~= "Health" and v.Name ~= "Sound" and v:FindFirstChild("LocalScript") then
+            v:Destroy()
+        end
+    end
+end
+
+game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
+    repeat task.wait() until char 
+    clearUnwantedScripts(char)
+    
+    char.ChildAdded:Connect(function(child)
+        if child:IsA("Script") and child:FindFirstChild("LocalScript") then
+            task.wait(0.25) 
+            child.LocalScript:FireServer() 
+        end
+    end)
+end)
+
+game:GetService("RunService").Heartbeat:Connect(function()
+    if getgenv().DesyncEnabled then
+        local hrp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character.HumanoidRootPart
+        if hrp then
+            local currentVelocity = hrp.Velocity
+            local currentPosition = hrp.Position
+            
+            -- Store real position
+            lastRealPosition = currentPosition
+            
+            -- Apply desync rotation
+            hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(0.0001), 0)
+        
+            -- Calculate fake position offset (simulating where server thinks you are)
+            local randomVelocity = Vector3.new(math.random(1000, 2000), math.random(1000, 2000), math.random(1000, 2000))
+            fakePositionOffset = fakePositionOffset + (randomVelocity * 0.01) -- Simulate movement over time
+            
+            -- Limit the offset to prevent going too far
+            if fakePositionOffset.Magnitude > 20 then
+                fakePositionOffset = fakePositionOffset.Unit * 20
+            end
+            
+            hrp.AssemblyLinearVelocity = randomVelocity
+            
+            -- Update visualizer with real and fake positions
+            local fakePosition = currentPosition + fakePositionOffset
+            updateVisualizer(currentPosition, fakePosition)
+            
+            game:GetService("RunService").RenderStepped:Wait() 
+            hrp.Velocity = currentVelocity 
+        end
+    else
+        realCharacter.Transparency = 1
+        fakeCharacter.Transparency = 1
+        connectionBeam.Enabled = false
+        fakePositionOffset = Vector3.new(0, 0, 0) -- Reset offset when disabled
+    end
+end)
+
+local UserInputService = game:GetService("UserInputService")
+local toggleKey = Enum.KeyCode.O
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if not gameProcessedEvent and input.KeyCode == toggleKey then
+        getgenv().DesyncEnabled = not getgenv().DesyncEnabled
+        print("Desync " .. (getgenv().DesyncEnabled and "Enabled" or "Disabled"))
+        
+        if not getgenv().DesyncEnabled then
+            realCharacter.Transparency = 1
+            fakeCharacter.Transparency = 1
+            connectionBeam.Enabled = false
+            fakePositionOffset = Vector3.new(0, 0, 0)
+        end
+    end
+end)
+
+MiscSection4:AddToggle({
+    text = "Toggle Desync",
+    state = false,
+    risky = true,
+    flag = "Toggle_1",
+    risky = false,
+    callback = function(v)
+        getgenv().DesyncEnabled = v
+        if not v then
+            realCharacter.Transparency = 1
+            fakeCharacter.Transparency = 1
+            connectionBeam.Enabled = false
+            fakePositionOffset = Vector3.new(0, 0, 0)
+        end
+        print(ValueText, v)
+    end
+}):AddBind({
+    enabled = true,
+    text = "Bind Desync",
+    mode = "toggle",
+    bind = "None",
+    flag = "ToggleKey_1",
+    state = false,
+    nomouse = false,
+    risky = false,
+    noindicator = false,
+    callback = function(v)
+        print(ValueText, v)
+    end,
+    keycallback = function(v)
+        print(ValueText, v)
+    end
+})
+
+MiscSection4:AddColor({
+    enabled = true,
+    text = "Color Desync",
+    color = Color3.fromRGB(255, 255, 255),
+    flag = "Color_1",
+    trans = 0,
+    open = false,   
+    risky = false,
+    callback = function(v)
+        getgenv().DesyncColor = v
+    end
+})
+
+-- Add Two Character Visualizer Toggle
+MiscSection4:AddToggle({
+    text = "Two Character Visualizer",
+    state = true,
+    risky = false,
+    tooltip = "Shows real and fake character positions",
+    flag = "TwoCharVisualizer",
+    callback = function(v)
+        if v and getgenv().DesyncEnabled then
+            realCharacter.Transparency = 0.3
+            fakeCharacter.Transparency = 0.3
+            connectionBeam.Enabled = true
+        else
+            realCharacter.Transparency = 1
+            fakeCharacter.Transparency = 1
+            connectionBeam.Enabled = false
+        end
+    end
+})
+
+-- Add visualizer color customization
+MiscSection4:AddColor({
+    enabled = true,
+    text = "Real Character Color",
+    color = Color3.fromRGB(0, 255, 0),
+    flag = "RealCharColor",
+    trans = 0,
+    open = false,
+    risky = false,
+    callback = function(v)
+        realCharacter.BrickColor = BrickColor.new(v)
+    end
+})
+
+MiscSection4:AddColor({
+    enabled = true,
+    text = "Fake Character Color",
+    color = Color3.fromRGB(255, 0, 0),
+    flag = "FakeCharColor",
+    trans = 0,
+    open = false,
+    risky = false,
+    callback = function(v)
+        fakeCharacter.BrickColor = BrickColor.new(v)
+    end
+})
+
+-- Moderator Detector
+MiscSection3:AddToggle({
+    text = "Moderator Detector (not work)",
+    flag = "ModDetectorToggle",
+    callback = function(enabled)
+        if enabled then
+            Cheat.Connections.PlayerAddedConnection = Players.PlayerAdded:Connect(function(player)
+                player:GetAttributeChangedSignal("InvisibleMode"):Connect(function()
+                    if player:GetAttribute("InvisibleMode") then
+                        StarterGui:SetCore("SendNotification", {
+                            Title = "MODERATOR DETECTED",
+                            Text = player.Name .. " is a moderator",
+                            Duration = 8
+                        })
+                    end
+                end)
+            end)
+        elseif Cheat.Connections.PlayerAddedConnection then
+            Cheat.Connections.PlayerAddedConnection:Disconnect()
+            Cheat.Connections.PlayerAddedConnection = nil
+        end
+    end
+})
+
+-- Name Hider
+-- MiscSection1:AddButton({
+--     text = "Name Hider",
+--     callback = function()
+--         getgenv().Config = {
+--             Headless = true,
+--             FakeDisplayName = "c00lkidd",
+--             FakeName = "???",
+--             FakeId = 7655248946
+--         }
+--         loadstring(game:HttpGet("https://raw.githubusercontent.com/Mixvpnv2/Name-Hider/refs/heads/main/Name-Hider"))()
+--     end
+-- })
+MiscSection1:AddButton({
+    enabled = true,
+    text = "Load OctoHookHelper",
+    confirm = true,
+    risky = True,
+    callback = function()
+       loadstring(game:HttpGet("https://raw.githubusercontent.com/Mixvpnv2/mixvpn.github.io/refs/heads/main/OctoHookHelper"))()
+    end
+})
+-- Sound Effects
+MiscSection2:AddButton({
+    text = "Change Hit Sound",
+    callback = function()
+        local hits = ReplicatedStorage:FindFirstChild("SFX")
+        if hits and hits:FindFirstChild("Hits") then
+            local hitReactions = hits.Hits:FindFirstChild("HitReactions")
+            if hitReactions then
+                for _, sound in ipairs(hitReactions:GetChildren()) do
+                    if sound:IsA("Sound") then
+                        sound.SoundId = "rbxassetid://6655787968"
+                        sound.PlaybackSpeed = 1.3
+                    end
+                end
+            end
+        end
+    end
+})
+
+MiscSection2:AddButton({
+    text = "OFF Ambient Only Lobby",
+    callback = function()
+        workspace.AmbientSounds.Ambient1.Volume = 0 
+        workspace.AmbientSounds.Ambient2.Volume = 0 
+        workspace.AmbientSounds.AmbientXmas.Volume = 0
+        if workspace.Radio and workspace.Radio:FindFirstChild("MeshPart") then
+            local music = workspace.Radio.MeshPart:FindFirstChild("Music")
+            if music and music:FindFirstChild("Sound") then
+                music.Sound.SoundId = "rbxassetid://9113731969"
+                music.Sound.PlaybackSpeed = 1
+                music.Sound.Volume = 3
+            end
+        end
+    end
+})
+
+-- Anchored Torso
+MiscSection1:AddButton({
+    text = "Anchored HumanoidRoofPart (Press J)",
+    callback = function()
+        UserInputService.InputBegan:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.J and Client.Character then
+                local upperTorso = Client.Character:FindFirstChild("UpperTorso")
+                if upperTorso then
+                    upperTorso.Anchored = not upperTorso.Anchored
+                end
+            end
+        end)
+    end
+})
+
+-- No Drowning
+MiscSection1:AddButton({
+    text = "No Drowning",
+    callback = function()
+        if Client.Character then
+            local health = Client.Character:FindFirstChild("Health")
+            if health then
+                health:Destroy()
+            end
+        end
+    end
+})
+
+
+-- Load Notification
+local Time = string.format("%."..tostring(Decimals).."f", os.clock() - Clock)
+library:SendNotification(("Loaded in "..Time.." seconds"), 5)
+
+-- Game Framework Setup
+local function SetupGameFramework()
+    -- Find game framework objects
+    for _, obj in pairs(getgc(true)) do
+        if type(obj) == "table" then
+            if rawget(obj, "updateClient") then
+                GameFramework.FPS = obj
+            end
+            if rawget(obj, "springs") and rawget(obj.springs, "sway") then
+                GameFramework.CurrentData = obj
+            end
+        end
+    end
+
+    -- Hook the updateClient method
+    if GameFramework.FPS and GameFramework.CurrentData then
+        local originalUpdate = GameFramework.FPS.updateClient
+        GameFramework.FPS.updateClient = function(...)
+            local args = {...}
+            local weaponData = args[1]
+            
+            -- Apply weapon modifications
+            if GameFramework.CurrentData then
+                -- Instant Lean
+                if Cheat.Options.GunMods.InstantLean.Value then
+                    GameFramework.CurrentData.springs.leanAlpha.Force = 25
+                    GameFramework.CurrentData.springs.leanAlpha.Speed = 50
+                else
+                    GameFramework.CurrentData.springs.leanAlpha.Force = GameFramework.Originals.Springs.leanAlpha.Force
+                    GameFramework.CurrentData.springs.leanAlpha.Speed = GameFramework.Originals.Springs.leanAlpha.Speed
+                end
+                
+                -- No Bobbing
+                if Cheat.Options.GunMods.NoBobbing.Value then
+                    for _, spring in pairs({"jumpTilt", "walkCycle", "sprintCycle", "strafeTilt"}) do
+                        GameFramework.CurrentData.springs[spring].Force = 0
+                        GameFramework.CurrentData.springs[spring].Speed = 0
+                    end
+                else
+                    for _, spring in pairs({"jumpTilt", "walkCycle", "sprintCycle", "strafeTilt"}) do
+                        GameFramework.CurrentData.springs[spring].Force = GameFramework.Originals.Springs[spring].Force
+                        GameFramework.CurrentData.springs[spring].Speed = GameFramework.Originals.Springs[spring].Speed
+                    end
+                end
+                
+                -- No Recoil
+                if Cheat.Options.GunMods.NoRecoil.Value then
+                    for _, spring in pairs({"cameraRecoil", "recoilRot"}) do
+                        GameFramework.CurrentData.springs[spring].Force = 0
+                        GameFramework.CurrentData.springs[spring].Speed = 0
+                    end
+                else
+                    for _, spring in pairs({"cameraRecoil", "recoilRot"}) do
+                        GameFramework.CurrentData.springs[spring].Force = GameFramework.Originals.Springs[spring].Force
+                        GameFramework.CurrentData.springs[spring].Speed = GameFramework.Originals.Springs[spring].Speed
+                    end
+                end
+                
+                -- No Sway
+                if Cheat.Options.GunMods.NoSway.Value then 
+                    GameFramework.CurrentData.springs.sway.Position = Vector3.new(0, 0, 0)
+                    GameFramework.CurrentData.springs.sway.Speed = 0
+                else
+                    GameFramework.CurrentData.springs.sway.Speed = GameFramework.Originals.Springs.sway.Speed
+                end
+                
+                -- Remove Obstructions
+                if Cheat.Options.GunMods.RemoveObstructions.Value then
+                    GameFramework.CurrentData.springs.wallTouchTilt.Force = 0
+                    GameFramework.CurrentData.springs.wallTouchTilt.Speed = 0
+                else
+                    GameFramework.CurrentData.springs.wallTouchTilt.Force = GameFramework.Originals.Springs.wallTouchTilt.Force
+                    GameFramework.CurrentData.springs.wallTouchTilt.Speed = GameFramework.Originals.Springs.wallTouchTilt.Speed
+                end
+            end
+            
+            -- Weapon-specific modifications
+            if weaponData then
+                -- Instant Equip
+                if Cheat.Options.GunMods.InstantEquip.Value then
+                    weaponData.EquipTValue = 100
+                end
+                
+                -- Instant Aim
+                if Cheat.Options.GunMods.InstantAim.Value and weaponData.AimInSpeed and weaponData.AimOutSpeed then
+                    weaponData.AimInSpeed = 0
+                    weaponData.AimOutSpeed = 0
+                end
+                
+                -- Unlock Firemodes
+                if Cheat.Options.GunMods.UnlockFiremodes.Value and weaponData.FireModes then
+                    weaponData.FireModes = {"Auto", "Semi"}
+                end
+                
+                -- Remove Obstructions (weapon part)
+                if Cheat.Options.GunMods.RemoveObstructions.Value and weaponData.TouchWallPosY then
+                    weaponData.TouchWallPosY = 0
+                    weaponData.TouchWallPosZ = 0
+                    weaponData.TouchWallRotX = 0
+                    weaponData.TouchWallRotY = 0
+                end
+            end
+            
+            return originalUpdate(unpack(args))
+        end
+    end
+end
+
+-- Character Handling
+local function CharacterAdded(character)
+    GameFramework.CurrentData = nil
+    RootPart = nil
+    
+    task.wait(3)
+    
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        RootPart = character.HumanoidRootPart
+        SetupGameFramework()
+        
+        -- Reinitialize weapon visuals
+        SetupWeaponVisuals()
+    end
+end
+
+Client.CharacterAdded:Connect(CharacterAdded)
+if Client.Character then
+    CharacterAdded(Client.Character)
+end
+
+-- Aspect Ratio Changer
+function UpdateRatio()
+    if Cheat.Options.Misc.AspectRatio.Enabled then
+        local components = {Camera.CFrame:GetComponents()}
+        components[4] = components[4] * (Cheat.Options.Misc.AspectRatio.Horizontal / 100)
+        components[8] = components[8] * (Cheat.Options.Misc.AspectRatio.Vertical / 100)
+        components[10] = components[10] * (Cheat.Options.Misc.AspectRatio.Horizontal / 100)
+        components[11] = components[11] * (Cheat.Options.Misc.AspectRatio.Vertical / 100)
+        Camera.CFrame = CFrame.new(unpack(components))
+    end
+end
+
+-- Anti-Aim System
+local JitterYaw = function()
+    return math.random(Cheat.Options.AntiAim.Yaw.LerpMin, Cheat.Options.AntiAim.Yaw.LerpMax)
+end
+
+local JitterRoll = function()
+    return math.random(Cheat.Options.AntiAim.Roll.LerpMin, Cheat.Options.AntiAim.Roll.LerpMax)
+end
+
+local function DesyncThink()
+    if not RootPart or not Cheat.Options.AntiAim.Enabled.Value then return end
+    
+    local CFY = 0
+    local CFZ = 0
+    
+    -- Yaw Calculation
+    if Cheat.Options.AntiAim.Yaw.Mode == "Static" then
+        CFY = Cheat.Options.AntiAim.Yaw.Value
+    elseif Cheat.Options.AntiAim.Yaw.Mode == "Jitter" then
+        CFY = JitterYaw()
+    elseif Cheat.Options.AntiAim.Yaw.Mode == "Random" then
+        CFY = math.random(-180, 180)
+    end
+    
+    -- Roll Calculation
+    if Cheat.Options.AntiAim.Roll.Mode == "Static" then
+        CFZ = Cheat.Options.AntiAim.Roll.Value
+    elseif Cheat.Options.AntiAim.Roll.Mode == "Jitter" then
+        CFZ = JitterRoll()
+    elseif Cheat.Options.AntiAim.Roll.Mode == "Random" then
+        CFZ = math.random(-180, 180)
+    end
+    
+    -- Apply desync
+    RootPart.CFrame = RootPart.CFrame * CFrame.Angles(0, math.rad(CFY), math.rad(CFZ))
+end
+
+-- Silent Aim System
+local function GetClosestPlayer()
+    local closestPlayer, closestDistance = nil, math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Client and player.Character then
+            local character = player.Character
+            local humanoid = character:FindFirstChild("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and humanoid.Health > 0 and rootPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                
+                if onScreen then
+                    local screenPoint = Vector2.new(screenPos.X, screenPos.Y)
+                    local distance = (screenPoint - center).Magnitude
+                    
+                    if distance < closestDistance and distance <= Cheat.Options.SilentAim.Fov.Size then
+                        closestPlayer = character
+                        closestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function GetHitPart(character)
+    local hitPart = character:FindFirstChild(Cheat.Options.SilentAim.HitPart)
+    return hitPart or character:FindFirstChild("HumanoidRootPart")
+end
+
+local function CalculateHitChance()
+    return math.random(1, 100) <= Cheat.Options.SilentAim.HitChance.Amount
+end
+
+local function Predict(targetPart, origin, projectileSpeed, gravity)
+    if not targetPart or not origin or not projectileSpeed then
+        return targetPart and targetPart.Position or Vector3.new()
+    end
+    
+    gravity = gravity or 0
+    local targetPos = targetPart.Position
+    local targetVel = targetPart.AssemblyLinearVelocity or Vector3.new()
+    
+    if targetPart:IsA("BasePart") and targetPart:GetRootPart() then
+        targetVel = targetPart:GetRootPart().AssemblyLinearVelocity or Vector3.new()
+    end
+    
+    local direction = targetPos - origin
+    local distance = direction.Magnitude
+    local timeToHit = distance / projectileSpeed
+    
+    -- Adjust for gravity
+    local drop = 0.5 * gravity * timeToHit * timeToHit
+    local adjustedPos = targetPos + (targetVel * timeToHit) - Vector3.new(0, drop, 0)
+    
+    return adjustedPos
+end
+
+local function PredictionDrop(origin, destination, speed, drop)
+    if not origin or not destination or not speed then return 0 end
+    local distance = (destination - origin).Magnitude
+    local timeToHit = distance / speed
+    return 0.5 * drop * timeToHit * timeToHit
+end
+
+-- Silent Aim Hook
+local BulletModule = require(ReplicatedStorage.Modules.FPS.Bullet)
+local OldCreateBullet = BulletModule.CreateBullet
+
+BulletModule.CreateBullet = function(...)
+    local Args = {...}
+    
+    if not checkcaller() and Cheat.Options.SilentAim.Enabled.Value then
+        local TargetCharacter = GetClosestPlayer()
+        
+        if TargetCharacter then
+            local TargetPart = GetHitPart(TargetCharacter)
+            
+            if TargetPart and CalculateHitChance() then
+                local ProjectileSpeed = 1000 -- Default value
+                local ProjectileDropValue = 0 -- Default value
+                
+                -- Try to get actual projectile values
+                if ReplicatedStorage:FindFirstChild("AmmoTypes") then
+                    local ammoType = ReplicatedStorage.AmmoTypes:FindFirstChild("Default")
+                    if ammoType then
+                        ProjectileSpeed = ammoType:GetAttribute("MuzzleVelocity") or ProjectileSpeed
+                        ProjectileDropValue = ammoType:GetAttribute("ProjectileDrop") or ProjectileDropValue
+                    end
+                end
+                
+                local PredictedAimPoint = Predict(TargetPart, Camera.CFrame.Position, ProjectileSpeed, ProjectileDropValue)
+                local Dropped = PredictionDrop(Camera.CFrame.Position, TargetPart.Position, ProjectileSpeed, ProjectileDropValue)
+                
+                -- Store last hit part for other systems
+                Cheat.storage.lastHitPart = TargetPart
+                
+                -- Modify bullet direction
+                if Args[5] and Args[5].CFrame then
+                    Args[5] = {
+                        CFrame = CFrame.new(Args[5].CFrame.Position, PredictedAimPoint) * 
+                                 CFrame.new(0, Dropped, 0)
+                    }
+                end
+            end
+        end
+    end
+    
+    return OldCreateBullet(unpack(Args))
+end
+
+-- FOV Circle Visualization
+local circle = Drawing.new("Circle")
+circle.Visible = Cheat.Options.SilentAim.Fov.Show
+circle.Thickness = 1
+circle.Color = Color3.fromRGB(255, 255, 255)
+circle.Transparency = 1
+circle.Filled = false
+
+-- Initialize weapon visuals and FOV systems
+task.spawn(function()
+    SetupWeaponVisuals()
+    PersistentFOV()
+end)
+
+RunService.RenderStepped:Connect(function()
+    -- Aspect Ratio Update
+    UpdateRatio()
+    
+    -- Anti-Aim Update
+    if Cheat.Options.AntiAim.Enabled.Value then
+        DesyncThink()
+    end
+    
+    -- FOV Circle Update
+    circle.Visible = Cheat.Options.SilentAim.Fov.Show
+    circle.Radius = Cheat.Options.SilentAim.Fov.Size
+    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    -- Update RootPart reference
+    if Client.Character and Client.Character:FindFirstChild("HumanoidRootPart") then
+        RootPart = Client.Character.HumanoidRootPart
+    end
+end)
+print("LoadBypass1")
+local LocalPlayer = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Connections = {}
+
+-- BodyMover classes to target
+local BodyMoverClasses = {
+    "BodyVelocity",
+    "BodyAngularVelocity", 
+    "BodyThrust",
+    "BodyPosition",
+    "BodyForce",
+    "BodyGyro"
+}
+
+-- Function to instantly disable all CharacterController connections
+local function applyInstantBypass(character)
+    -- Clear any existing connections first
+    for _, conn in pairs(Connections) do
+        if conn and typeof(conn) == "RBXScriptConnection" then
+            conn:Disconnect()
+        end
+    end
+    Connections = {}
+
+    -- Wait for humanoid to exist
+    if not character:FindFirstChild("Humanoid") then
+        character:WaitForChild("Humanoid")
+    end
+    local Humanoid = character:FindFirstChild("Humanoid")
+
+    if Humanoid then
+        -- Immediately disable all CharacterController connections on humanoid properties
+        local humanoidSignals = {
+            Humanoid:GetPropertyChangedSignal("WalkSpeed"),
+            Humanoid:GetPropertyChangedSignal("JumpPower"),
+            Humanoid:GetPropertyChangedSignal("HipHeight"),
+            Humanoid.StateChanged,
+            Humanoid.ChildAdded,
+            Humanoid.ChildRemoved
+        }
+
+        for _, signal in pairs(humanoidSignals) do
+            for _, conn in pairs(getconnections(signal)) do
+                if conn and typeof(conn) == "RBXScriptConnection" then
+                    local func = conn.Function
+                    if func and typeof(func) == "function" then
+                        local info = debug.getinfo(func)
+                        if info and info.source and string.find(info.source, "CharacterController") then
+                            conn:Disable()
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Remove any existing BodyMovers
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                for _, moverType in pairs(BodyMoverClasses) do
+                    local mover = part:FindFirstChildWhichIsA(moverType)
+                    if mover then
+                        mover:Destroy()
+                    end
+                end
+                
+                -- Disable ChildAdded connections for BodyMovers
+                for _, conn in pairs(getconnections(part.ChildAdded)) do
+                    if conn and typeof(conn) == "RBXScriptConnection" then
+                        local func = conn.Function
+                        if func and typeof(func) == "function" then
+                            local info = debug.getinfo(func)
+                            if info and info.source and string.find(info.source, "CharacterController") then
+                                conn:Disable()
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Disable workspace gravity monitoring
+    for _, conn in pairs(getconnections(workspace:GetPropertyChangedSignal("Gravity"))) do
+        if conn and typeof(conn) == "RBXScriptConnection" then
+            local func = conn.Function
+            if func and typeof(func) == "function" then
+                local info = debug.getinfo(func)
+                if info and info.source and string.find(info.source, "CharacterController") then
+                    conn:Disable()
+                end
+            end
+        end
+    end
+
+    -- Set up continuous monitoring for new parts and BodyMovers
+    local descendantConnection = character.DescendantAdded:Connect(function(descendant)
+        if descendant:IsA("BasePart") then
+            for _, conn in pairs(getconnections(descendant.ChildAdded)) do
+                if conn and typeof(conn) == "RBXScriptConnection" then
+                    local func = conn.Function
+                    if func and typeof(func) == "function" then
+                        local info = debug.getinfo(func)
+                        if info and info.source and string.find(info.source, "CharacterController") then
+                            conn:Disable()
+                        end
+                    end
+                end
+            end
+        elseif table.find(BodyMoverClasses, descendant.ClassName) then
+            -- Immediately destroy any BodyMover that gets added
+            descendant:Destroy()
+        end
+    end)
+    
+    table.insert(Connections, descendantConnection)
+end
+
+-- Apply bypass immediately on character load
+local function handleCharacter(character)
+    applyInstantBypass(character)
+    
+    -- Set up a heartbeat loop to continuously reapply the bypass
+    local heartbeat
+    heartbeat = RunService.Heartbeat:Connect(function()
+        -- Re-check and disable any new CharacterController connections
+        if character and character.Parent then
+            applyInstantBypass(character)
+            
+            -- Also continuously remove any BodyMovers that appear
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    for _, moverType in pairs(BodyMoverClasses) do
+                        local mover = part:FindFirstChildWhichIsA(moverType)
+                        if mover then
+                            mover:Destroy()
+                        end
+                    end
+                end
+            end
+        else
+            heartbeat:Disconnect()
+        end
+    end)
+    
+    table.insert(Connections, heartbeat)
+end
+
+-- Initial application
+if LocalPlayer.Character then
+    handleCharacter(LocalPlayer.Character)
+end
+
+-- Reapply when character respawns
+local characterAdded = LocalPlayer.CharacterAdded:Connect(function(character)
+    handleCharacter(character)
+end)
+table.insert(Connections, characterAdded)
+
+-- Cleanup on script termination
+local function cleanup()
+    for _, conn in pairs(Connections) do
+        if conn and typeof(conn) == "RBXScriptConnection" then
+            conn:Disconnect()
+        end
+    end
+    Connections = {}
+end
+-- Initialization Complete
+library:SendNotification("OctoHook.Xyz fully initialized", 3)
